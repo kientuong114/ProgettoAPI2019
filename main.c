@@ -596,12 +596,6 @@ unsigned int hash(unsigned int key) {
 	//Not really a hash, more like a function to avoid any 
 	return key%ENTITY_HASH_TABLE_SIZE;
 }
-/* 
-void add_new_relation(entity* from, entity* to, relation_type* rel_type){
-	newRel->ID = hash(from->ID + to->ID + rel_type->ID);
-	rel_head_insert(&newRel, &(rel_type->hashtable[newRel->ID]));
-}
-*/
 
 entity* add_new_entity(entity** hashtable, char* name){
 	entity* newEnt = malloc(sizeof(entity));
@@ -628,7 +622,10 @@ void initialize_structure(entity*** hash_table, relation_type** relation_type_li
 	*relation_type_list = NULL;
 }
 
-void addent(){
+void addent(char* name){
+	if(!find_entity(name)){
+		add_new_entity(global_entity_hash_table, name);
+	}
 }
 
 void delent(){

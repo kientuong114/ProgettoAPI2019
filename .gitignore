@@ -1,0 +1,5 @@
+*.out
+main
+testing/
+planning.md
+*.swp
