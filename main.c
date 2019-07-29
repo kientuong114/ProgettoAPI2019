@@ -38,7 +38,7 @@
 #define LINE_BUFFER_SIZE 200
 
 //Set this constant to 0 to void verbose log messages
-const int verbose = 0;
+const int verbose = 1;
 
 //Set this constant to 0 to skip over NULL cells when printing hash tables
 const int suppress_NULL = 1;
@@ -88,7 +88,7 @@ typedef struct rb_tree{
 } rb_tree;
 
 typedef struct scoreboard{
-	rb_tree ent_tree;
+	rb_tree* ent_tree;
 	rb_node* max_score_node;
 	struct scoreboard_entry **hash_table;
 } scoreboard_t;
@@ -104,7 +104,7 @@ typedef struct rel_type{
 	struct rel_type* prec;
 	struct rel_type* next;
 	relation** hash_table;
-        scoreboard_t scoreboard;
+        scoreboard_t* scoreboard;
 } relation_type;
 
 typedef struct ent_rel_list{ 
@@ -366,7 +366,7 @@ entity* find_entity(entity** hash_table, char* name){
 
 scoreboard_entry_t* find_scoreboard_entry(relation_type* current_rel_type, entity* ent){
 	unsigned int position = hash(string_compactor(2, ent->name, current_rel_type->name), SCOREBOARD);
-	return find_scoreboard_entry_in_list(current_rel_type->scoreboard.hash_table[position], ent);
+	return find_scoreboard_entry_in_list(current_rel_type->scoreboard->hash_table[position], ent);
 }
 
 relation** get_new_rel_hash_table(){
@@ -443,9 +443,9 @@ void print_all_scoreboard_entries(relation_type* global_relation_type_list){
 	while(global_relation_type_list != NULL){
 		printf("Printing the scoreboard for relation of type %s\n", global_relation_type_list->name);
 		printf("Printing the hash table: \n");
-		print_scoreboard_hash_table(global_relation_type_list->scoreboard.hash_table, SCOREBOARD_HASH_TABLE_SIZE);
+		print_scoreboard_hash_table(global_relation_type_list->scoreboard->hash_table, SCOREBOARD_HASH_TABLE_SIZE);
 		printf("Printing the tree: \n");
-		rb_preorder_tree_walk(global_relation_type_list->scoreboard.ent_tree.root);
+		rb_preorder_tree_walk(global_relation_type_list->scoreboard->ent_tree->root);
 		global_relation_type_list = global_relation_type_list->next;
 	}
 
@@ -543,12 +543,12 @@ rb_node* rb_tree_predecessor(rb_node* z){
 	return y;
 }
 
-void rb_insert_fixup(rb_tree* tree, rb_node** z){
+void rb_insert_fixup(rb_tree* tree, rb_node* z){
 	rb_node *x, *y;
-	if(*z == tree->root){
+	if(z == tree->root){
 		tree->root->colour = 'b';
 	}else{
-		x = (*z)->p;
+		x = z->p;
 		if(x->colour == 'r'){
 			if(x == x->p->left){
 				y = x->p->right;
@@ -556,16 +556,16 @@ void rb_insert_fixup(rb_tree* tree, rb_node** z){
 					x->colour = 'b';
 					y->colour = 'b';
 					x->p->colour = 'r';
-					rb_insert_fixup(tree, &(x->p));
+					rb_insert_fixup(tree, x->p);
 				} else {
-					if (*z == x->right){
-						*z = x;
-						rb_left_rotate(tree, *z);
-						x = (*z)->p;
+					if (z == x->right){
+						z = x;
+						rb_left_rotate(tree, z);
+						x = z->p;
 					}
 					x->colour = 'b';
 					x->p->colour = 'r';
-					rb_right_rotate(tree, (x->p));
+					rb_right_rotate(tree, x->p);
 				}
 			} else {
 				y = x->p->left;
@@ -573,81 +573,81 @@ void rb_insert_fixup(rb_tree* tree, rb_node** z){
 					x->colour = 'b';
 					y->colour = 'b';
 					x->p->colour = 'r';
-					rb_insert_fixup(tree, &(x->p));
+					rb_insert_fixup(tree, x->p);
 				} else {
-					if (*z == x->left){
-						*z = x;
-						rb_right_rotate(tree, *z);
-						x = (*z)->p;
+					if (z == x->left){
+						z = x;
+						rb_right_rotate(tree, z);
+						x = z->p;
 					}
 					x->colour = 'b';
 					x->p->colour = 'r';
-					rb_left_rotate(tree, (x->p));
+					rb_left_rotate(tree, x->p);
 				}
 			}
 		}
 	}
 }
 
-void rb_delete_fixup(rb_tree* tree, rb_node** x, rb_node** parent,  char side){
+void rb_delete_fixup(rb_tree* tree, rb_node* x, rb_node* parent,  char side){
 	rb_node* w;
-	if((*x)!=NULL && ((*x)->colour == 'r' || (*x)->p == NULL)){
-		(*x)->colour = 'b';
+	if(x!=NULL && (x->colour == 'r' || x->p == NULL)){
+		x->colour = 'b';
 	} else if(side == 'l'){
-		w = (*parent)->right;
+		w = parent->right;
 		if(w->colour == 'r'){
 			w->colour = 'b';
-			(*parent)->colour = 'r';
-			rb_left_rotate(tree, *parent);
+			parent->colour = 'r';
+			rb_left_rotate(tree, parent);
 		}
 		if((w->left == NULL || w->left->colour == 'b') && (w->right == NULL || w->right->colour == 'b')){
 			w->colour = 'r';
-			if((*parent)->p==NULL){
+			if(parent->p==NULL){
 				rb_delete_fixup(tree, parent, NULL, 'l');
-			} else if(*parent == (*parent)->p->left){
-				rb_delete_fixup(tree, parent, &((*parent)->p), 'l');
+			} else if(parent == parent->p->left){
+				rb_delete_fixup(tree, parent, parent->p, 'l');
 			} else {
-				rb_delete_fixup(tree, parent, &((*parent)->p), 'r');
+				rb_delete_fixup(tree, parent, parent->p, 'r');
 			}
 		} else {
 			if(w->right == NULL || w->right->colour == 'b'){
 				w->left->colour = 'b';
 				w->colour = 'r';
 				rb_right_rotate(tree, w);
-				w = (*parent)->right;
+				w = parent->right;
 			}
-			w->colour = (*parent)->colour;
-			(*parent)->colour = 'b';
+			w->colour = parent->colour;
+			parent->colour = 'b';
 			w->right->colour = 'b';
-			rb_left_rotate(tree, *parent);
+			rb_left_rotate(tree, parent);
 		}
 	} else if(side == 'r') {
-		w = (*parent)->left;
+		w = parent->left;
 		if(w->colour == 'r'){
 			w->colour = 'b';
-			(*parent)->colour = 'r';
-			rb_right_rotate(tree, *parent);
+			parent->colour = 'r';
+			rb_right_rotate(tree, parent);
 		}
 		if((w->right == NULL || w->right->colour == 'b') && (w->left == NULL || w->left->colour == 'b')){
 			w->colour = 'r';
-			if((*parent)->p == NULL){
+			if(parent->p == NULL){
 				rb_delete_fixup(tree, parent, NULL, 'l');
-			} else if(*parent == (*parent)->p->left){
-				rb_delete_fixup(tree, parent, &((*parent)->p), 'l');
+			} else if(parent == parent->p->left){
+				rb_delete_fixup(tree, parent, parent->p, 'l');
 			} else {
-				rb_delete_fixup(tree, parent, &((*parent)->p), 'r');
+				rb_delete_fixup(tree, parent, parent->p, 'r');
 			}
 		} else {
 			if(w->left == NULL || w->left->colour == 'b'){
 				w->right->colour = 'b';
 				w->colour = 'r';
 				rb_left_rotate(tree, w);
-				w = (*parent)->left;
+				w = parent->left;
 			}
-			w->colour = (*parent)->colour;
-			(*parent)->colour = 'b';
+			w->colour = parent->colour;
+			parent->colour = 'b';
 			w->left->colour = 'b';
-			rb_right_rotate(tree, *parent);
+			rb_right_rotate(tree, parent);
 		}
 	} else {
 		printf("Invalid Side\n");
@@ -655,16 +655,16 @@ void rb_delete_fixup(rb_tree* tree, rb_node** x, rb_node** parent,  char side){
 	}
 }
 
-int rb_delete(rb_tree* tree, rb_node** z){
+int rb_delete(rb_tree* tree, rb_node* z){
 	//Deletes node and returns its key
 	rb_node* y = NULL;
 	rb_node* x = NULL;
 	char side;
-	int to_return = (*z)->score;
-	if((*z)->left == NULL || (*z)->right == NULL){
-		 y = *z;
+	int to_return = z->score;
+	if(z->left == NULL || z->right == NULL){
+		 y = z;
 	} else {
-		y = rb_tree_successor(*z);		
+		y = rb_tree_successor(z);		
 	}
 	if(y->left != NULL){
 		x = y->left;
@@ -683,42 +683,70 @@ int rb_delete(rb_tree* tree, rb_node** z){
 		side = 'r';
 		y->p->right = x;
 	}
-	if (y != *z){
-		(*z)->score = y->score;
-		(*z)->ent = y->ent;
+	rb_node* parent = y->p;
+	char old_colour = y->colour;
+	if (y != z){
+		//We need to swap the nodes entirely: just changing the values destroys the link between nodes and scoreboard entries
+		//z->score = y->score;
+		//z->ent = y->ent;	
+		if(y->p == z){
+			//If parent of y was z then, after the exchange, the parent of x will be y itself.
+			//The problem arises because otherwise y->p still points to z, which contains outdated information
+			parent = y;
+		}
+		y->colour = z->colour;
+		if(z->p == NULL){
+			tree->root = y;
+		}
+		y->p = z->p;
+		if(y->p){
+			if(z == z->p->left){
+				y->p->left = y;
+			} else {
+				y->p->right = y;
+			}
+		}
+		y->left = z->left;
+		y->right = z->right;
+		if(y->left){
+			y->left->p = y;
+		}
+		if(y->right){
+			y->right->p = y;
+		}
 	}
-	if (y->colour == 'b'){	
-		rb_delete_fixup(tree, &x, &(y->p), side);
+	if (old_colour == 'b'){	
+		rb_delete_fixup(tree, x, parent, side);
 	}
-	free(y);
+	free(z);
 	(tree->size)--;
 	return to_return;
 }
 
-void rb_insert(rb_tree* tree, rb_node** z){
+void rb_insert(rb_tree* tree, rb_node* z){
 	rb_node* y = NULL;
 	rb_node* x = tree->root;
 	while(x!=NULL){
 		y = x;
 		//if((*z)->score < x->score){
-		if(!rb_node_compare(*z, x)){
+		if(!rb_node_compare(z, x)){
 			x = x->left;
 		} else {
 			x = x->right;
 		}
 	}	
-	(*z)->p = y;
+	z->p = y;
 	if(y == NULL){
-		tree->root = *z;
+		tree->root = z;
 	//}else if((*z)->score < y->score){
-	} else if(!rb_node_compare(*z, y)) {
-		y->left = *z;
+	} else if(!rb_node_compare(z, y)) {
+		y->left = z;
 	} else {
-		y->right = *z;
+		y->right = z;
 	}
-	(*z)->left = NULL;
-	(*z)->right = NULL;
-	(*z)->colour = 'r';
+	z->left = NULL;
+	z->right = NULL;
+	z->colour = 'r';
 	rb_insert_fixup(tree, z);
 	(tree->size)++;
 }
@@ -807,6 +835,7 @@ relation_type* add_new_relation_type(relation_type** relation_type_list, char* n
 	relation_type* new_rel_type = malloc(sizeof(relation_type));
 	new_rel_type->name = malloc(strlen(name)+1);
 	strcpy(new_rel_type->name, name);
+	new_rel_type->scoreboard = malloc(sizeof(scoreboard_t));
 	rel_type_list_head_insert(new_rel_type, relation_type_list);
 	initialize_new_rel_type(new_rel_type);
 	return new_rel_type;
@@ -830,31 +859,38 @@ scoreboard_entry_t* add_entry_to_scoreboard(entity* ent, relation_type* current_
 	unsigned int position = hash(string_compactor(2, ent->name, current_rel_type->name), SCOREBOARD);
 	scoreboard_entry_t *new_scoreboard_entry = malloc(sizeof(scoreboard_entry_t));
 	new_scoreboard_entry->node = new_node;
-	scoreboard_hash_table_insert(current_rel_type->scoreboard.hash_table, new_scoreboard_entry, position);	
-	if(current_rel_type->scoreboard.ent_tree.root == NULL || rb_node_compare(new_node, current_rel_type->scoreboard.max_score_node)>0){
-		current_rel_type->scoreboard.max_score_node = new_node;
+	scoreboard_hash_table_insert(current_rel_type->scoreboard->hash_table, new_scoreboard_entry, position);	
+	if(current_rel_type->scoreboard->ent_tree->root == NULL || rb_node_compare(new_node, current_rel_type->scoreboard->max_score_node)>0){
+		current_rel_type->scoreboard->max_score_node = new_node;
 	}
-	rb_insert(&(current_rel_type->scoreboard.ent_tree), &new_node);
+	rb_insert(current_rel_type->scoreboard->ent_tree, new_node);
 	return new_scoreboard_entry;
 }
 
 void update_scoreboard_entry(int score_difference, entity* ent, relation_type* current_rel_type){
 	scoreboard_entry_t* current_entry = find_scoreboard_entry(current_rel_type, ent);
-	int old_score = rb_delete(&(current_rel_type->scoreboard.ent_tree), &(current_entry->node));
-	current_entry->node = malloc(sizeof(rb_node));
-	current_entry->node->ent = ent;
-	current_entry->node->score = old_score + score_difference;
-	if(rb_node_compare(current_entry->node, current_rel_type->scoreboard.max_score_node)){
-		current_rel_type->scoreboard.max_score_node = current_entry->node;
+	rb_node* to_delete = current_entry->node;
+	rb_node* new_node = (rb_node*)malloc(sizeof(rb_node));
+	new_node->score = current_entry->node->score + score_difference;
+	new_node->ent = ent;
+	if(strcmp(new_node->ent->name, current_rel_type->scoreboard->max_score_node->ent->name) && rb_node_compare(new_node, current_rel_type->scoreboard->max_score_node)){
+		//If the max node is lesser than the adjourned one, change the max node
+		current_rel_type->scoreboard->max_score_node = new_node;
 	}
-	rb_insert(&(current_rel_type->scoreboard.ent_tree), &(current_entry->node));
+	rb_delete(current_rel_type->scoreboard->ent_tree, to_delete);
+	current_entry->node = new_node;
+	//current_entry->node = new_node;
+	//current_entry->node = malloc(sizeof(rb_node));
+	//current_entry->node->ent = ent;
+	//current_entry->node->score = old_score + score_difference;
+	rb_insert(current_rel_type->scoreboard->ent_tree, new_node);
 }
 
 void print_all_scoreboards(relation_type* global_relation_type_list){
 	printf("Printing all scoreboards: \n");
 	while(global_relation_type_list){
 		int i = 0;
-		rb_node* current_node = global_relation_type_list->scoreboard.max_score_node;
+		rb_node* current_node = rb_tree_maximum(global_relation_type_list->scoreboard->ent_tree->root);
 		printf("Printing scoreboard for relationship %s\n", global_relation_type_list->name);
 		while(current_node){
 			printf("(%d) | %s [%d]\n", i, current_node->ent->name, current_node->score);
@@ -882,9 +918,10 @@ void initialize_rb_tree(rb_tree* tree){
 
 void initialize_new_rel_type(relation_type* new_rel_type){
 	new_rel_type->hash_table = get_new_rel_hash_table();
-	new_rel_type->scoreboard.hash_table = get_new_scoreboard_hash_table();
-	new_rel_type->scoreboard.max_score_node = NULL;
-	initialize_rb_tree(&(new_rel_type->scoreboard.ent_tree));	
+	new_rel_type->scoreboard->hash_table = get_new_scoreboard_hash_table();
+	new_rel_type->scoreboard->max_score_node = NULL;
+	new_rel_type->scoreboard->ent_tree = malloc(sizeof(rb_tree));
+	initialize_rb_tree(new_rel_type->scoreboard->ent_tree);	
 }
 
 void addent(entity** global_entity_hash_table, char* name){
@@ -898,6 +935,9 @@ void delent(entity** global_entity_hash_table, char* name){
 }
 
 void addrel(entity** global_entity_hash_table, relation_type** global_relation_type_list, char* from, char* to, char* name){
+	if(verbose){
+		printf("addrel: from %s to %s. Type: %s\n", from, to, name);
+	}
 	entity* ent_from = find_entity(global_entity_hash_table, from);
 	entity* ent_to = find_entity(global_entity_hash_table, to);
 	if(ent_from && ent_to){
@@ -935,17 +975,20 @@ void report(relation_type* global_relation_type_list){
 		} else {
 			sprintf(current_line, "\"%s\" \"", nav->name);
 		}
-		strcat(current_line, nav->scoreboard.max_score_node->ent->name);
+		rb_node* max_node = rb_tree_maximum(nav->scoreboard->ent_tree->root);
+		strcat(current_line, rb_tree_maximum(max_node)->ent->name);
+		//strcat(current_line, nav->scoreboard->max_score_node->ent->name);
 		strcat(current_line, "\" ");
-		rb_node* next_node = rb_tree_predecessor(nav->scoreboard.max_score_node);
-		while(next_node!=NULL && next_node->score == nav->scoreboard.max_score_node->score){
+		rb_node* next_node = rb_tree_predecessor(max_node);
+		//rb_node* next_node = rb_tree_predecessor(nav->scoreboard->max_score_node);
+		while(next_node!=NULL && next_node->score == max_node->score){
 			strcat(current_line, "\"");
 			strcat(current_line, next_node->ent->name);
 			strcat(current_line, "\" ");
 			next_node = rb_tree_predecessor(next_node);
 		}
 		char points[12];
-		sprintf(points, "%d;", nav->scoreboard.max_score_node->score);
+		sprintf(points, "%d;", max_node->score);
 		strcat(current_line, points);
 		strcat(output_string, current_line);
 		nav = nav->next;
