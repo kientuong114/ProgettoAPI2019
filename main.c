@@ -33,17 +33,18 @@
 #define ENTITY_HASH_TABLE_MASK 0x0
 #define SCOREBOARD_HASH_TABLE_MASK 0x0
 
-#define BUFFER_SIZE 1000
+#define INPUT_BUFFER_SIZE 1000
+#define OUTPUT_BUFFER_SIZE 1000
+#define LINE_BUFFER_SIZE 200
 
 //Set this constant to 0 to void verbose log messages
-const int verbose = 1;
+const int verbose = 0;
 
 //Set this constant to 0 to skip over NULL cells when printing hash tables
 const int suppress_NULL = 1;
 
 //TODO: Check for failed mallocs on all functions
 //TODO: Rehashing when load factor is greater than 0.75
-
 
 // STRUCTURES DECLARATIONS
 
@@ -189,7 +190,7 @@ void rel_list_head_insert(relation* new_relation, relation** list_head){
 		if(*list_head == NULL){
 			printf("(Old head of list was NULL)\n");
 		} else {
-			printf("(Old head of list was from %s to %s)\n", (*list_head)->next->from->name, (*list_head)->next->to->name);
+			printf("(Old head of list was from %s to %s)\n", (*list_head)->from->name, (*list_head)->to->name);
 		}
 	}
 	new_relation->next = *list_head;
@@ -567,23 +568,21 @@ void rb_insert_fixup(rb_tree* tree, rb_node** z){
 					rb_right_rotate(tree, (x->p));
 				}
 			} else {
-				if(x == x->p->right){
-					y = x->p->left;
-					if(y->colour == 'r'){
-						x->colour = 'b';
-						y->colour = 'b';
-						x->p->colour = 'r';
-						rb_insert_fixup(tree, &(x->p));
-					} else {
-						if (*z == x->left){
-							*z = x;
-							rb_right_rotate(tree, *z);
-							x = (*z)->p;
-						}
-						x->colour = 'b';
-						x->p->colour = 'r';
-						rb_left_rotate(tree, (x->p));
+				y = x->p->left;
+				if(y != NULL && y->colour == 'r'){
+					x->colour = 'b';
+					y->colour = 'b';
+					x->p->colour = 'r';
+					rb_insert_fixup(tree, &(x->p));
+				} else {
+					if (*z == x->left){
+						*z = x;
+						rb_right_rotate(tree, *z);
+						x = (*z)->p;
 					}
+					x->colour = 'b';
+					x->p->colour = 'r';
+					rb_left_rotate(tree, (x->p));
 				}
 			}
 		}
@@ -639,7 +638,7 @@ void rb_delete_fixup(rb_tree* tree, rb_node** x, rb_node** parent,  char side){
 				rb_delete_fixup(tree, parent, &((*parent)->p), 'r');
 			}
 		} else {
-			if(w->left->colour == 'b'){
+			if(w->left == NULL || w->left->colour == 'b'){
 				w->right->colour = 'b';
 				w->colour = 'r';
 				rb_left_rotate(tree, w);
@@ -661,7 +660,7 @@ int rb_delete(rb_tree* tree, rb_node** z){
 	rb_node* y = NULL;
 	rb_node* x = NULL;
 	char side;
-	int to_return;
+	int to_return = (*z)->score;
 	if((*z)->left == NULL || (*z)->right == NULL){
 		 y = *z;
 	} else {
@@ -686,8 +685,8 @@ int rb_delete(rb_tree* tree, rb_node** z){
 	}
 	if (y != *z){
 		(*z)->score = y->score;
+		(*z)->ent = y->ent;
 	}
-	to_return = y->score;
 	if (y->colour == 'b'){	
 		rb_delete_fixup(tree, &x, &(y->p), side);
 	}
@@ -828,7 +827,6 @@ scoreboard_entry_t* add_entry_to_scoreboard(entity* ent, relation_type* current_
 	rb_node* new_node = malloc(sizeof(rb_node));
 	new_node->score = score;
 	new_node->ent = ent;
-	rb_insert(&(current_rel_type->scoreboard.ent_tree), &new_node);
 	unsigned int position = hash(string_compactor(2, ent->name, current_rel_type->name), SCOREBOARD);
 	scoreboard_entry_t *new_scoreboard_entry = malloc(sizeof(scoreboard_entry_t));
 	new_scoreboard_entry->node = new_node;
@@ -836,6 +834,7 @@ scoreboard_entry_t* add_entry_to_scoreboard(entity* ent, relation_type* current_
 	if(current_rel_type->scoreboard.ent_tree.root == NULL || rb_node_compare(new_node, current_rel_type->scoreboard.max_score_node)>0){
 		current_rel_type->scoreboard.max_score_node = new_node;
 	}
+	rb_insert(&(current_rel_type->scoreboard.ent_tree), &new_node);
 	return new_scoreboard_entry;
 }
 
@@ -845,7 +844,25 @@ void update_scoreboard_entry(int score_difference, entity* ent, relation_type* c
 	current_entry->node = malloc(sizeof(rb_node));
 	current_entry->node->ent = ent;
 	current_entry->node->score = old_score + score_difference;
+	if(rb_node_compare(current_entry->node, current_rel_type->scoreboard.max_score_node)){
+		current_rel_type->scoreboard.max_score_node = current_entry->node;
+	}
 	rb_insert(&(current_rel_type->scoreboard.ent_tree), &(current_entry->node));
+}
+
+void print_all_scoreboards(relation_type* global_relation_type_list){
+	printf("Printing all scoreboards: \n");
+	while(global_relation_type_list){
+		int i = 0;
+		rb_node* current_node = global_relation_type_list->scoreboard.max_score_node;
+		printf("Printing scoreboard for relationship %s\n", global_relation_type_list->name);
+		while(current_node){
+			printf("(%d) | %s [%d]\n", i, current_node->ent->name, current_node->score);
+			current_node = rb_tree_predecessor(current_node);
+			i++;
+		}
+		global_relation_type_list = global_relation_type_list->next;
+	}
 }
 
 void initialize_global_structure(entity*** hash_table, relation_type** relation_type_list){
@@ -906,17 +923,51 @@ void delrel(){
 	
 }
 
-void report(){
-
+void report(relation_type* global_relation_type_list){
+	relation_type* nav = global_relation_type_list;
+	char* output_string = calloc(OUTPUT_BUFFER_SIZE, sizeof(char));
+	int first_line = 1;
+	while(nav){
+		char* current_line = calloc(LINE_BUFFER_SIZE, sizeof(char));
+		if(!first_line){
+			//Adding space after semicolon if needed
+			sprintf(current_line, " \"%s\" \"", nav->name);
+		} else {
+			sprintf(current_line, "\"%s\" \"", nav->name);
+		}
+		strcat(current_line, nav->scoreboard.max_score_node->ent->name);
+		strcat(current_line, "\" ");
+		rb_node* next_node = rb_tree_predecessor(nav->scoreboard.max_score_node);
+		while(next_node!=NULL && next_node->score == nav->scoreboard.max_score_node->score){
+			strcat(current_line, "\"");
+			strcat(current_line, next_node->ent->name);
+			strcat(current_line, "\" ");
+			next_node = rb_tree_predecessor(next_node);
+		}
+		char points[12];
+		sprintf(points, "%d;", nav->scoreboard.max_score_node->score);
+		strcat(current_line, points);
+		strcat(output_string, current_line);
+		nav = nav->next;
+		if(first_line){
+			first_line = 0;
+		}
+		free(current_line);
+	}
+	if(strlen(output_string)){
+		puts(output_string);
+	} else {
+		puts("none");
+	}
+	free(output_string);
 }
 
 int main(){
 	entity** global_entity_hash_table;
 	relation_type* global_relation_type_list;
 	initialize_global_structure(&global_entity_hash_table, &global_relation_type_list);
-	//testSuite1(global_entity_hash_table, global_relation_type_list);
-	char *inputBuffer = malloc(BUFFER_SIZE);
-	size_t n = BUFFER_SIZE;
+	char *inputBuffer = malloc(INPUT_BUFFER_SIZE);
+	size_t n = INPUT_BUFFER_SIZE;
 	char *command = NULL, *arg1 = NULL, *arg2 = NULL, *arg3 = NULL;
 	char separators[] = " \"\n";
 	while(1){
@@ -933,10 +984,19 @@ int main(){
 				arg1 = strtok(NULL, separators);
 				arg2 = strtok(NULL, separators);
 				arg3 = strtok(NULL, separators);
-				addrel(global_entity_hash_table, & global_relation_type_list, arg1, arg2, arg3);
+				addrel(global_entity_hash_table, &global_relation_type_list, arg1, arg2, arg3);
+			}
+			if(strcmp(command, "report")==0){
+				report(global_relation_type_list);
+			}
+			if(verbose){
+				print_all_scoreboards(global_relation_type_list);
+			}
+		} else {
+			if(verbose){
+				printf("Failed to read line: terminating program\n");
 			}
 		}
-		
 	}
 }
 

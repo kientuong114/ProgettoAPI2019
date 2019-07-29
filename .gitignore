@@ -3,3 +3,6 @@ main
 testing/
 planning.md
 *.swp
+*.txt
+testGenerator/
+test_suites/
