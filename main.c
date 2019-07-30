@@ -316,6 +316,18 @@ void relation_list_delete(relation* to_remove, relation** list_head){
 	free(to_remove);
 }
 
+void ent_rel_list_head_delete(entity_relation_list** list_head){
+	//For the entity to be deleted, it must be manually done through delete_relation
+	if(*list_head){
+		entity_relation_list* to_delete = *list_head;
+		*list_head = (*list_head)->next;
+		if(*list_head){
+			(*list_head)->prec = NULL;
+		}
+		free(to_delete);
+	}
+}
+
 entity* find_entity_in_list(entity* list_head, char* name){
 	while(list_head!=NULL){
 		if(strcmp(list_head->name, name)==0){
@@ -987,6 +999,11 @@ void update_scoreboard_entry(int score_difference, scoreboard_entry_t* current_e
 	rb_insert(current_rel_type->scoreboard->ent_tree, new_node);
 }
 
+void delete_scoreboard_entry(scoreboard_entry_t* current_entry, relation_type* current_rel_type){
+	rb_node* to_delete = current_entry->node;
+	rb_delete(current_rel_type->scoreboard->ent_tree, to_delete);
+}
+
 void print_all_scoreboards(relation_type* global_relation_type_list){
 	printf("[PRINT] ");
 	printf("Printing all scoreboards: \n");
@@ -1007,6 +1024,38 @@ void print_all_scoreboards(relation_type* global_relation_type_list){
 void delete_relation(relation_type* current_rel_type, relation* to_delete){
 	unsigned int position = hash(string_compactor(3, to_delete->from->name, to_delete->to->name, current_rel_type->name), REL);
 	relation_list_delete(to_delete, &(current_rel_type->hash_table[position]));
+}
+
+void relation_type_list_delete(relation_type** global_relation_type_list, relation_type* to_delete){
+	relation_type* nav = *global_relation_type_list;
+	while(nav){
+		if(strcmp(nav->name, to_delete->name)==0){
+			if(nav->next){
+				nav->next->prec = nav->prec;
+			}
+			if(nav->prec){
+				nav->prec->next = nav->next;
+			} else {
+				*global_relation_type_list = nav->next;
+			}
+			free(nav->hash_table); //Assuming that the hash_table is already empty
+			free(nav->scoreboard->ent_tree); //Assuming that the tree is empty
+			free(nav->scoreboard->hash_table); //Also assuming that this hash table is empty
+			free(nav->scoreboard);
+			free(nav);
+			return;
+		}
+		nav = nav->next;
+	}
+}
+
+void clear_all_entity_relations(entity_relation_list** rel_list){
+	entity_relation_list* nav = *rel_list;
+	while(nav){
+		delete_relation(nav->rel_type, nav->rel);
+		nav = nav->next;
+		ent_rel_list_head_delete(rel_list);
+	}
 }
 
 void initialize_global_structure(entity*** hash_table, relation_type** relation_type_list){
@@ -1044,8 +1093,18 @@ void addent(entity** global_entity_hash_table, char* name){
 	}
 }
 
-void delent(entity** global_entity_hash_table, char* name){
-	
+void delent(entity** global_entity_hash_table, relation_type* global_relation_type_list, char* name){
+	//Check if entity actually exists and tries to fetch it
+	entity* current_entity = find_entity(global_entity_hash_table, name);
+	if(current_entity){
+		clear_all_entity_relations(&(current_entity->rel_list));
+		while(global_relation_type_list){
+			scoreboard_entry_t* current_scoreboard_entry = find_scoreboard_entry(global_relation_type_list, current_entity);
+			if(current_scoreboard_entry){
+				delete_scoreboard_entry(current_scoreboard_entry, global_relation_type_list);	
+			}
+		}
+	}
 }
 
 void addrel(entity** global_entity_hash_table, relation_type** global_relation_type_list, char* from, char* to, char* name){
@@ -1088,9 +1147,9 @@ void addrel(entity** global_entity_hash_table, relation_type** global_relation_t
 	}
 }
 
-void delrel(entity** global_entity_hash_table, relation_type* global_relation_type_list, char* from, char* to, char* name){
+void delrel(entity** global_entity_hash_table, relation_type** global_relation_type_list, char* from, char* to, char* name){
 	//Check if relation type exists
-	relation_type* current_rel_type = find_relation_type_in_list(global_relation_type_list, name);
+	relation_type* current_rel_type = find_relation_type_in_list(*global_relation_type_list, name);
 	if(current_rel_type){
 		//If so, find both entities involved
 		entity* ent_from = find_entity(global_entity_hash_table, from);
@@ -1108,11 +1167,11 @@ void delrel(entity** global_entity_hash_table, relation_type* global_relation_ty
 			//Delete the relation object
 			delete_relation(current_rel_type, current_relation);
 			//TODO: Delete the relation reference from the entities (?)
+			if(current_rel_type->scoreboard->ent_tree->size == 0){
+				relation_type_list_delete(global_relation_type_list, current_rel_type);
+			}
 		}
 	}
-	
-	
-	
 }
 
 void report(relation_type* global_relation_type_list){
@@ -1164,14 +1223,20 @@ int main(){
 			if(strcmp(command, "addent")==0){
 				arg1 = strtok(NULL, separators);	
 				addent(global_entity_hash_table, arg1);
-			}
-			if(strcmp(command, "addrel")==0){
+			} else if(strcmp(command, "addrel")==0){
 				arg1 = strtok(NULL, separators);
 				arg2 = strtok(NULL, separators);
 				arg3 = strtok(NULL, separators);
 				addrel(global_entity_hash_table, &global_relation_type_list, arg1, arg2, arg3);
-			}
-			if(strcmp(command, "report")==0){
+			} else if(strcmp(command, "delent")==0){
+				arg1 = strtok(NULL, separators);
+				delent(global_entity_hash_table, global_relation_type_list, arg1);
+			} else if(strcmp(command, "delrel")==0){
+				arg1 = strtok(NULL, separators);
+				arg2 = strtok(NULL, separators);
+				arg3 = strtok(NULL, separators);
+				delrel(global_entity_hash_table, &global_relation_type_list, arg1, arg2, arg3);
+			} else if(strcmp(command, "report")==0){
 				report(global_relation_type_list);
 			}
 			if(verbose){
