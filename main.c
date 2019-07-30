@@ -38,7 +38,7 @@
 #define LINE_BUFFER_SIZE 200
 
 //Set this constant to 0 to void verbose log messages
-const int verbose = 1;
+const int verbose = 0;
 
 //Set this constant to 0 to skip over NULL cells when printing hash tables
 const int suppress_NULL = 1;
@@ -109,9 +109,15 @@ typedef struct rel_type{
 
 typedef struct ent_rel_list{ 
 	relation_type* rel_type;
+	//Structured as nodes of a BST
 	relation* rel;
-	struct ent_rel_list* next;	
+	/*
+	struct ent_rel_list* left;	
+	struct ent_rel_list* right;
+	struct ent_rel_list* p;
+	*/
 	struct ent_rel_list* prec;
+	struct ent_rel_list* next;
 } entity_relation_list;
 
 typedef enum data_type{
@@ -172,6 +178,7 @@ void rb_inorder_tree_walk(rb_node*);
 void ent_list_head_insert(entity* new_entity, entity** list_head){
 	//Inserts a relation as head of list_head
 	if(verbose){
+		printf("[DEBUG] ");
 		printf("Inserting entity %s at head of list pointed by %p ", new_entity->name, (void*)list_head);
 		printf("(Old head of list was %s)\n", *list_head == NULL ? "NULL" : (*list_head)->name);
 	}
@@ -186,6 +193,7 @@ void ent_list_head_insert(entity* new_entity, entity** list_head){
 void rel_list_head_insert(relation* new_relation, relation** list_head){
 	//Inserts a relation as head of list_head
 	if(verbose){
+		printf("[DEBUG] ");
 		printf("Inserting relation from %s to %s at head of list pointed by %p ", new_relation->from->name , new_relation->to->name, (void*)list_head);
 		if(*list_head == NULL){
 			printf("(Old head of list was NULL)\n");
@@ -204,6 +212,7 @@ void rel_list_head_insert(relation* new_relation, relation** list_head){
 void rel_type_list_head_insert(relation_type* new_rel_type, relation_type** list_head){
 	//Inserts a relation type as head of list_head
 	if(verbose){
+		printf("[DEBUG] ");
 		printf("Inserting relation type %s at head of list pointed by %p ", new_rel_type->name , (void*)list_head);
 		printf("(Old head of list was %s)\n", *list_head == NULL ? "NULL" : (*list_head)->name);
 	}
@@ -215,8 +224,40 @@ void rel_type_list_head_insert(relation_type* new_rel_type, relation_type** list
 	*list_head = new_rel_type;
 }
 
+void rel_type_list_ordered_insert(relation_type* new_rel_type, relation_type** list_head){
+	//Inserts a relation type in the correct position
+	if(verbose){
+		printf("[DEBUG] Inserting (in order) relation type %s at head of list pointed by %p ", new_rel_type->name, (void*) list_head);
+	}
+	relation_type* nav = *list_head;
+	relation_type* follow = NULL;
+	//nav is the pointer that leads the search
+	//follow is the pointer one node behind it
+	//When the search is finished we insert between nav and follow
+	while(nav){
+		if(strcmp(nav->name, new_rel_type->name) > 0){
+			break;
+		} else {
+			follow = nav;
+			nav = nav->next;
+		}
+	}
+	if(follow){
+		follow->next = new_rel_type;
+	} else {
+		//If follow == NULL then we're doing a head insert
+		*list_head = new_rel_type;
+	}
+	if(nav){
+		nav->prec = new_rel_type;
+	}
+	new_rel_type->prec = follow;
+	new_rel_type->next = nav;
+}
+
 void ent_rel_list_head_insert(entity_relation_list* new_ent_rel, entity_relation_list** list_head){
 	if(verbose){
+		printf("[DEBUG] ");
 		printf("Inserting relation from %s to %s of type %s to entity relation list at head of list pointed by %p ", new_ent_rel->rel->from->name, new_ent_rel->rel->to->name, new_ent_rel->rel_type->name , (void*)list_head);
 		if(*list_head==NULL){
 			printf("(Old head of list was NULL)");
@@ -234,6 +275,7 @@ void ent_rel_list_head_insert(entity_relation_list* new_ent_rel, entity_relation
 
 void scoreboard_entry_list_head_insert(scoreboard_entry_t* new_entry, scoreboard_entry_t** list_head){
 	if(verbose){
+		printf("[DEBUG] ");
 		printf("Inserting new scoreboard node for entity %s with score %d in list pointed by %p", new_entry->node->ent->name, new_entry->node->score, (void*)list_head);
 		printf("(Old head of list was %s)\n", *list_head == NULL ? "NULL" : (*list_head)->node->ent->name);
 	}
@@ -245,10 +287,25 @@ void scoreboard_entry_list_head_insert(scoreboard_entry_t* new_entry, scoreboard
 	*list_head = new_entry;
 }	
 
-void ent_list_delete(entity* to_remove, entity** list_head){
+void entity_list_delete(entity* to_remove, entity** list_head){
 	//Deletes to_remove entity from list
 	if(verbose){
-		printf("Deleting entity %s in list pointed by %p ", to_remove->name, (void*)list_head);
+		printf("[DEBUG] ");
+		printf("Deleting entity %s in list pointed by %p \n", to_remove->name, (void*)list_head);
+	}
+	if(to_remove->next){
+		to_remove->next->prec = to_remove->prec;
+	}
+	if(to_remove->prec){
+		to_remove->prec->next = to_remove->next;
+	}
+	free(to_remove);
+}
+
+void relation_list_delete(relation* to_remove, relation** list_head){
+	if(verbose){
+		printf("[DEBUG] ");
+		printf("Deleting relation from %s to %s in list pointed by %p \n", to_remove->from->name, to_remove->to->name, (void*)list_head);
 	}
 	if(to_remove->next){
 		to_remove->next->prec = to_remove->prec;
@@ -263,6 +320,7 @@ entity* find_entity_in_list(entity* list_head, char* name){
 	while(list_head!=NULL){
 		if(strcmp(list_head->name, name)==0){
 			if(verbose){
+				printf("[DEBUG] ");
 				printf("Found entity %s in list\n", name);
 			}
 			return list_head;
@@ -276,6 +334,7 @@ relation* find_relation_in_list(relation* list_head, char* from, char* to){
 	while(list_head!=NULL){
 		if(strcmp(list_head->from->name, from)==0 && strcmp(list_head->to->name, to) == 0 ){
 			if(verbose){
+				printf("[DEBUG] ");
 				printf("Found relation in list\n");
 			}
 			return list_head;
@@ -289,6 +348,7 @@ relation_type* find_relation_type_in_list(relation_type* list_head, char* name){
 	while(list_head!=NULL){
 		if(strcmp(list_head->name, name)==0){
 			if(verbose){
+				printf("[DEBUG] ");
 				printf("Found relation type in list\n");
 			}
 			return list_head;
@@ -302,6 +362,7 @@ scoreboard_entry_t* find_scoreboard_entry_in_list(scoreboard_entry_t* list_head,
 	while(list_head!=NULL){
 		if(list_head->node->ent == ent){ //Pointer comparison, should both point to the same memory area
 			if(verbose){
+				printf("[DEBUG] ");
 				printf("Found relation type in list\n");
 			}
 			return list_head;
@@ -311,8 +372,22 @@ scoreboard_entry_t* find_scoreboard_entry_in_list(scoreboard_entry_t* list_head,
 	return NULL;
 }	
 
+relation* find_relation(relation_type* current_rel_type, char* from, char* to){
+	unsigned int position = hash(string_compactor(3, current_rel_type->name, from, to), REL);
+	relation* current_relation = find_relation_in_list(current_rel_type->hash_table[position], from, to);
+	return current_relation;
+}
+/*  
+int is_relation_monitored(relation_type* current_rel_type, char* from, char* to){
+	unsigned int position = hash(string_compactor(3, current_rel_type->name, from, to), REL);
+	relation* current_relation = find_relation_in_list(current_relation_type->hash_table[position], from, to);
+	return current_relation ? 1 : 0;
+}
+*/
+
 void print_entity_list(entity* list_head){
 	while(list_head!=NULL){
+		printf("[PRINT] (%p) ", (void*)list_head);
 		printf("Entity Name %s\n", list_head->name);
 		list_head = list_head->next;
 	}
@@ -320,6 +395,7 @@ void print_entity_list(entity* list_head){
 
 void print_relation_list(relation* list_head){
 	while(list_head!=NULL){
+		printf("[PRINT] (%p) ", (void*)list_head);
 		printf("Relation from %s to %s\n", list_head->from->name, list_head->to->name);
 		list_head = ((relation*)list_head)->next;
 	}
@@ -327,6 +403,7 @@ void print_relation_list(relation* list_head){
 
 void print_rel_type_list(relation_type* list_head){
 	while(list_head!=NULL){
+		printf("[PRINT] (%p) ", (void*)list_head);
 		printf("Relation Type: %s\n", list_head->name);
 		list_head = ((relation_type*)list_head)->next;
 	}
@@ -334,6 +411,7 @@ void print_rel_type_list(relation_type* list_head){
 
 void print_entity_relation_list(entity_relation_list* list_head){
 	while(list_head!=NULL){
+		printf("[PRINT] (%p) ", (void*)list_head);
 		printf("Relation from %s to %s\n", list_head->rel->from->name, list_head->rel->to->name);
 		list_head = ((entity_relation_list*)list_head)->next;
 	}
@@ -342,6 +420,7 @@ void print_entity_relation_list(entity_relation_list* list_head){
 
 void print_scoreboard_entry_list(scoreboard_entry_t* list_head){
 	while(list_head!=NULL){
+		printf("[PRINT] (%p) ", (void*)list_head);
 		printf("Scoreboard entry with score %d and entity %s\n", list_head->node->score, list_head->node->ent->name);
 		list_head = list_head->next;
 	}
@@ -389,6 +468,7 @@ scoreboard_entry_t** get_new_scoreboard_hash_table(){
 void print_entity_hash_table(entity** hash_table, size_t hash_table_size){
 	int i;
 	for(i=0; i<hash_table_size; i++){
+		printf("[PRINT] (%p) ", (void*)hash_table);
 		if(hash_table[i]==NULL){
 			if(suppress_NULL){
 				continue;
@@ -404,6 +484,7 @@ void print_entity_hash_table(entity** hash_table, size_t hash_table_size){
 void print_relation_hash_table(relation** hash_table, size_t hash_table_size){
 	int i;
 	for(i=0; i<hash_table_size; i++){
+		printf("[PRINT] (%p) ", (void*)hash_table);
 		if(hash_table[i]==NULL){
 			if(suppress_NULL){
 				continue;
@@ -419,6 +500,7 @@ void print_relation_hash_table(relation** hash_table, size_t hash_table_size){
 void print_scoreboard_hash_table(scoreboard_entry_t** hash_table, size_t hash_table_size){
 	int i;
 	for(i=0; i<hash_table_size; i++){
+		printf("[PRINT] (%p) ", (void*)hash_table);
 		if(hash_table[i]==NULL){
 			if(suppress_NULL){
 				continue;
@@ -433,6 +515,7 @@ void print_scoreboard_hash_table(scoreboard_entry_t** hash_table, size_t hash_ta
 
 void print_all_relations(relation_type* global_relation_type_list){
 	while(global_relation_type_list != NULL){
+		printf("[PRINT] ");
 		printf("Printing all relations of type %s\n", global_relation_type_list->name);
 		print_relation_hash_table(global_relation_type_list->hash_table, REL_HASH_TABLE_SIZE);
 		global_relation_type_list = global_relation_type_list->next;
@@ -441,6 +524,7 @@ void print_all_relations(relation_type* global_relation_type_list){
 
 void print_all_scoreboard_entries(relation_type* global_relation_type_list){
 	while(global_relation_type_list != NULL){
+		printf("[PRINT] ");
 		printf("Printing the scoreboard for relation of type %s\n", global_relation_type_list->name);
 		printf("Printing the hash table: \n");
 		print_scoreboard_hash_table(global_relation_type_list->scoreboard->hash_table, SCOREBOARD_HASH_TABLE_SIZE);
@@ -465,7 +549,7 @@ int rb_node_compare(rb_node* x, rb_node* y){ //Acts as a > 'greater than' sign
 	} else if (x->score < y->score){ //If the second one has greater score then x<y
 		return 0;
 	} else { //If the scores are the same then the one that comes before is considered the greater
-		return strcmp(x->ent->name, y->ent->name)<0?1:0;
+		return strcmp(x->ent->name, y->ent->name) < 0 ? 1 : 0;
 	}
 }
 
@@ -687,8 +771,6 @@ int rb_delete(rb_tree* tree, rb_node* z){
 	char old_colour = y->colour;
 	if (y != z){
 		//We need to swap the nodes entirely: just changing the values destroys the link between nodes and scoreboard entries
-		//z->score = y->score;
-		//z->ent = y->ent;	
 		if(y->p == z){
 			//If parent of y was z then, after the exchange, the parent of x will be y itself.
 			//The problem arises because otherwise y->p still points to z, which contains outdated information
@@ -755,26 +837,48 @@ void rb_inorder_tree_walk(rb_node* node){
 	if(node->left != NULL){
 		rb_inorder_tree_walk(node->left);
 	} else {
+		printf("[PRINT] ");
 		printf("Hit a NULL node\n");
 	}	
+	printf("[PRINT] ");
 	printf("Printing node with score %d and colour %c\n", node->score, node->colour);
 	if(node->right != NULL){
 		rb_inorder_tree_walk(node->right);
 	} else { 
+		printf("[PRINT] ");
 		printf("Hit a NULL node\n");
 	}
 }
 
+void rb_modified_inorder_tree_walk(rb_node* node, char* ent_string, int score_to_search){
+	if(node->right != NULL){
+		rb_modified_inorder_tree_walk(node->right, ent_string, score_to_search);
+	}
+	if(node->score == score_to_search){
+		strcat(ent_string, " \"");
+		strcat(ent_string, node->ent->name);
+		strcat(ent_string, "\"");
+	} else {
+		return;
+	}
+	if(node->left != NULL){
+		rb_modified_inorder_tree_walk(node->left, ent_string, score_to_search);
+	}
+}
+
 void rb_preorder_tree_walk(rb_node* node){
+	printf("[PRINT] ");
 	printf("Printing node with score %d and colour %c for entity %s\n", node->score, node->colour, node->ent->name);
 	if(node->left != NULL){
 		rb_preorder_tree_walk(node->left);
 	} else {
+		printf("[PRINT] ");
 		printf("Hit a NULL node\n");
 	}	
 	if(node->right != NULL){
 		rb_preorder_tree_walk(node->right);
 	} else { 
+		printf("[PRINT] ");
 		printf("Hit a NULL node\n");
 	}
 }
@@ -815,6 +919,7 @@ entity* add_new_entity(entity** hash_table, char* name){
 	strcpy(new_entity->name, name);
 	unsigned int position = hash(string_compactor(1,name), ENTITY);
 	if(verbose){
+		printf("[DEBUG] ");
 		printf("Adding new entity %s in position %d of hash table\n", name, position);
 	}
 	entity_hash_table_insert(hash_table, new_entity, position);	
@@ -836,7 +941,7 @@ relation_type* add_new_relation_type(relation_type** relation_type_list, char* n
 	new_rel_type->name = malloc(strlen(name)+1);
 	strcpy(new_rel_type->name, name);
 	new_rel_type->scoreboard = malloc(sizeof(scoreboard_t));
-	rel_type_list_head_insert(new_rel_type, relation_type_list);
+	rel_type_list_ordered_insert(new_rel_type, relation_type_list);
 	initialize_new_rel_type(new_rel_type);
 	return new_rel_type;
 }
@@ -867,30 +972,28 @@ scoreboard_entry_t* add_entry_to_scoreboard(entity* ent, relation_type* current_
 	return new_scoreboard_entry;
 }
 
-void update_scoreboard_entry(int score_difference, entity* ent, relation_type* current_rel_type){
-	scoreboard_entry_t* current_entry = find_scoreboard_entry(current_rel_type, ent);
+void update_scoreboard_entry(int score_difference, scoreboard_entry_t* current_entry, relation_type* current_rel_type){
+	//scoreboard_entry_t* current_entry = find_scoreboard_entry(current_rel_type, ent);
 	rb_node* to_delete = current_entry->node;
 	rb_node* new_node = (rb_node*)malloc(sizeof(rb_node));
 	new_node->score = current_entry->node->score + score_difference;
-	new_node->ent = ent;
+	new_node->ent = current_entry->node->ent;
 	if(strcmp(new_node->ent->name, current_rel_type->scoreboard->max_score_node->ent->name) && rb_node_compare(new_node, current_rel_type->scoreboard->max_score_node)){
-		//If the max node is lesser than the adjourned one, change the max node
+		//If the max node is lesser than the adjourned one, change the max node. Also check if they are different nodes
 		current_rel_type->scoreboard->max_score_node = new_node;
 	}
 	rb_delete(current_rel_type->scoreboard->ent_tree, to_delete);
 	current_entry->node = new_node;
-	//current_entry->node = new_node;
-	//current_entry->node = malloc(sizeof(rb_node));
-	//current_entry->node->ent = ent;
-	//current_entry->node->score = old_score + score_difference;
 	rb_insert(current_rel_type->scoreboard->ent_tree, new_node);
 }
 
 void print_all_scoreboards(relation_type* global_relation_type_list){
+	printf("[PRINT] ");
 	printf("Printing all scoreboards: \n");
 	while(global_relation_type_list){
 		int i = 0;
 		rb_node* current_node = rb_tree_maximum(global_relation_type_list->scoreboard->ent_tree->root);
+		printf("[PRINT] ");
 		printf("Printing scoreboard for relationship %s\n", global_relation_type_list->name);
 		while(current_node){
 			printf("(%d) | %s [%d]\n", i, current_node->ent->name, current_node->score);
@@ -899,6 +1002,11 @@ void print_all_scoreboards(relation_type* global_relation_type_list){
 		}
 		global_relation_type_list = global_relation_type_list->next;
 	}
+}
+
+void delete_relation(relation_type* current_rel_type, relation* to_delete){
+	unsigned int position = hash(string_compactor(3, to_delete->from->name, to_delete->to->name, current_rel_type->name), REL);
+	relation_list_delete(to_delete, &(current_rel_type->hash_table[position]));
 }
 
 void initialize_global_structure(entity*** hash_table, relation_type** relation_type_list){
@@ -925,7 +1033,13 @@ void initialize_new_rel_type(relation_type* new_rel_type){
 }
 
 void addent(entity** global_entity_hash_table, char* name){
+	//Expected complexity O(1)
+	if(verbose){
+		printf("[DEBUG] ");
+		printf("addent: entity %s\n", name);
+	}
 	if(!find_entity(global_entity_hash_table, name)){
+		//If entity does not already exist then add it
 		add_new_entity(global_entity_hash_table, name);
 	}
 }
@@ -935,31 +1049,69 @@ void delent(entity** global_entity_hash_table, char* name){
 }
 
 void addrel(entity** global_entity_hash_table, relation_type** global_relation_type_list, char* from, char* to, char* name){
+	//Expected complexity O(log(e)) 
 	if(verbose){
+		printf("[DEBUG] ");
 		printf("addrel: from %s to %s. Type: %s\n", from, to, name);
 	}
+	//Find if both entities that are involved exist
 	entity* ent_from = find_entity(global_entity_hash_table, from);
 	entity* ent_to = find_entity(global_entity_hash_table, to);
 	if(ent_from && ent_to){
-		relation_type* current_rel_type;
-		if(!find_relation_type_in_list(*global_relation_type_list, name)){
+		//If both entities actually exist then attempt an insertion of a new relation between ent_from and ent_to
+		relation_type* current_rel_type = find_relation_type_in_list(*global_relation_type_list, name);
+		if(!current_rel_type){
+			//If the current relation type does not exist then create it
 			current_rel_type = add_new_relation_type(global_relation_type_list, name);	
+			//And create a new entry for the scoreboard
 			add_entry_to_scoreboard(ent_to, current_rel_type, 1);
 		} else {
-			current_rel_type = find_relation_type_in_list(*global_relation_type_list, name);
+			//If the current relation type does exist...
+			if(find_relation(current_rel_type, from, to)){
+				//...check if the relation already exists...
+				return;
+			}
+			//...if not, then check if there's an existing scoreboard entry for the receiving entity
 			scoreboard_entry_t* current_scoreboard_entry = find_scoreboard_entry(current_rel_type, ent_to);
 			if(current_scoreboard_entry){
-				update_scoreboard_entry(1, ent_to, current_rel_type);
+				//If the scoreboard entry exists, then update it, adding 1 to its score
+				update_scoreboard_entry(1, current_scoreboard_entry, current_rel_type);
 			} else {
+				//Otherwise create a new scoreboard entry with score 1
 				add_entry_to_scoreboard(ent_to, current_rel_type, 1);
 			}
 		}
+		//Create the new relation object and add it to the hash table of relations
 		relation* new_relation = add_new_relation(ent_from, ent_to, current_rel_type);
+		//Also insert a reference to the newly created relation in the entity relation list
 		add_relation_to_entities(ent_from, ent_to, current_rel_type, new_relation);
 	}
 }
 
-void delrel(){
+void delrel(entity** global_entity_hash_table, relation_type* global_relation_type_list, char* from, char* to, char* name){
+	//Check if relation type exists
+	relation_type* current_rel_type = find_relation_type_in_list(global_relation_type_list, name);
+	if(current_rel_type){
+		//If so, find both entities involved
+		entity* ent_from = find_entity(global_entity_hash_table, from);
+		entity* ent_to = find_entity(global_entity_hash_table, to);
+		if(ent_from && ent_to){
+			//If both entities exist, then check if the relation that we need to delete exists
+			relation* current_relation = find_relation(current_rel_type, from, to);
+			if(!current_relation){
+				//If no such relation exists, then do nothing
+				return;
+			}
+			//Otherwise we need to actually delete the relation: update the scoreboard, removing 1 from the score
+			scoreboard_entry_t* current_scoreboard_entry = find_scoreboard_entry(current_rel_type, ent_to);
+			update_scoreboard_entry(-1, current_scoreboard_entry, current_rel_type);
+			//Delete the relation object
+			delete_relation(current_rel_type, current_relation);
+			//TODO: Delete the relation reference from the entities (?)
+		}
+	}
+	
+	
 	
 }
 
@@ -971,24 +1123,14 @@ void report(relation_type* global_relation_type_list){
 		char* current_line = calloc(LINE_BUFFER_SIZE, sizeof(char));
 		if(!first_line){
 			//Adding space after semicolon if needed
-			sprintf(current_line, " \"%s\" \"", nav->name);
+			sprintf(current_line, " \"%s\"", nav->name);
 		} else {
-			sprintf(current_line, "\"%s\" \"", nav->name);
+			sprintf(current_line, "\"%s\"", nav->name);
 		}
 		rb_node* max_node = rb_tree_maximum(nav->scoreboard->ent_tree->root);
-		strcat(current_line, rb_tree_maximum(max_node)->ent->name);
-		//strcat(current_line, nav->scoreboard->max_score_node->ent->name);
-		strcat(current_line, "\" ");
-		rb_node* next_node = rb_tree_predecessor(max_node);
-		//rb_node* next_node = rb_tree_predecessor(nav->scoreboard->max_score_node);
-		while(next_node!=NULL && next_node->score == max_node->score){
-			strcat(current_line, "\"");
-			strcat(current_line, next_node->ent->name);
-			strcat(current_line, "\" ");
-			next_node = rb_tree_predecessor(next_node);
-		}
+		rb_modified_inorder_tree_walk(nav->scoreboard->ent_tree->root, current_line, max_node->score);
 		char points[12];
-		sprintf(points, "%d;", max_node->score);
+		sprintf(points, " %d;", max_node->score);
 		strcat(current_line, points);
 		strcat(output_string, current_line);
 		nav = nav->next;
