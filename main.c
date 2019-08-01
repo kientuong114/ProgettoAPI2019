@@ -34,11 +34,11 @@
 #define SCOREBOARD_HASH_TABLE_MASK 0x0
 
 #define INPUT_BUFFER_SIZE 1000
-#define OUTPUT_BUFFER_SIZE 1000
-#define LINE_BUFFER_SIZE 200
+#define OUTPUT_BUFFER_SIZE 20000
+#define LINE_BUFFER_SIZE 5000
 
 //Set this constant to 0 to void verbose log messages
-const int verbose = 1;
+const int verbose = 0;
 
 //Set this constant to 0 to skip over NULL cells when printing hash tables
 const int suppress_NULL = 1;
@@ -416,6 +416,7 @@ scoreboard_entry_t* find_scoreboard_entry_in_list(scoreboard_entry_t* list_head,
 		if(list_head->node->ent == ent){ //Pointer comparison, should both point to the same memory area
 			if(verbose){
 				printf("[DEBUG] ");
+				//TODO: Change this debug message
 				printf("Found relation type in list\n");
 			}
 			return list_head;
@@ -1048,6 +1049,9 @@ void delete_scoreboard_entry(scoreboard_entry_t* current_entry, relation_type* c
 	scoreboard_entry_list_delete(&(current_rel_type->scoreboard->hash_table[position]), current_entry);
 	rb_node* to_delete = current_entry->node;
 	rb_delete(current_rel_type->scoreboard->ent_tree, to_delete);
+	if(current_rel_type->scoreboard->ent_tree->root){
+		current_rel_type->scoreboard->max_score_node = rb_tree_maximum(current_rel_type->scoreboard->ent_tree->root);
+	}
 }
 
 scoreboard_entry_t* add_entry_to_scoreboard(entity* ent, relation_type* current_rel_type, int score){
@@ -1071,13 +1075,16 @@ void update_scoreboard_entry(int score_difference, scoreboard_entry_t* current_e
 		rb_node* new_node = (rb_node*)malloc(sizeof(rb_node));
 		new_node->score = current_entry->node->score + score_difference;
 		new_node->ent = current_entry->node->ent;
+		/*
 		if(strcmp(new_node->ent->name, current_rel_type->scoreboard->max_score_node->ent->name) && rb_node_compare(new_node, current_rel_type->scoreboard->max_score_node)){
 			//If the max node is lesser than the adjourned one, change the max node. Also check if they are different nodes
 			current_rel_type->scoreboard->max_score_node = new_node;
 		}
+		*/
 		rb_delete(current_rel_type->scoreboard->ent_tree, to_delete);
 		current_entry->node = new_node;
 		rb_insert(current_rel_type->scoreboard->ent_tree, new_node);
+		current_rel_type->scoreboard->max_score_node = rb_tree_maximum(current_rel_type->scoreboard->ent_tree->root);
 	} else {
 		delete_scoreboard_entry(current_entry, current_rel_type);	
 	}
