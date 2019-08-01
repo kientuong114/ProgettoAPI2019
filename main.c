@@ -227,7 +227,7 @@ void rel_type_list_head_insert(relation_type* new_rel_type, relation_type** list
 void rel_type_list_ordered_insert(relation_type* new_rel_type, relation_type** list_head){
 	//Inserts a relation type in the correct position
 	if(verbose){
-		printf("[DEBUG] Inserting (in order) relation type %s at head of list pointed by %p ", new_rel_type->name, (void*) list_head);
+		printf("[DEBUG] Inserting (in order) relation type %s at head of list pointed by %p \n", new_rel_type->name, (void*) list_head);
 	}
 	relation_type* nav = *list_head;
 	relation_type* follow = NULL;
@@ -430,13 +430,6 @@ relation* find_relation(relation_type* current_rel_type, char* from, char* to){
 	relation* current_relation = find_relation_in_list(current_rel_type->hash_table[position], from, to);
 	return current_relation;
 }
-/*  
-int is_relation_monitored(relation_type* current_rel_type, char* from, char* to){
-	unsigned int position = hash(string_compactor(3, current_rel_type->name, from, to), REL);
-	relation* current_relation = find_relation_in_list(current_relation_type->hash_table[position], from, to);
-	return current_relation ? 1 : 0;
-}
-*/
 
 void print_entity_list(entity* list_head){
 	while(list_head!=NULL){
@@ -538,13 +531,14 @@ void print_entity_hash_table(entity** hash_table, size_t hash_table_size){
 void print_relation_hash_table(relation** hash_table, size_t hash_table_size){
 	int i;
 	for(i=0; i<hash_table_size; i++){
-		printf("[PRINT] (%p) ", (void*)hash_table);
 		if(hash_table[i]==NULL){
 			if(suppress_NULL){
 				continue;
 			}
+			printf("[PRINT] (%p) ", (void*)hash_table);
 			printf("Position: %d - Content: NULL\n", i);
 		} else {
+			printf("[PRINT] (%p) ", (void*)hash_table);
 			printf("Position: %d - Non empty cell: printing list...\n", i);
 			print_relation_list(hash_table[i]);
 		}
@@ -1119,13 +1113,13 @@ void delete_entity(entity** global_entity_hash_table, entity* to_delete){
 }
 
 void delete_relation(relation_type* current_rel_type, relation* to_delete){
-	unsigned int position = hash(string_compactor(3, to_delete->from->name, to_delete->to->name, current_rel_type->name), REL);
-	if(find_relation_in_list(current_rel_type->hash_table[position], to_delete->from->name, to_delete->to->name)){
+	unsigned int position = hash(string_compactor(3, current_rel_type->name, to_delete->from->name, to_delete->to->name), REL);
+	//if(find_relation_in_list(current_rel_type->hash_table[position], to_delete->from->name, to_delete->to->name)){
 		relation_list_delete(to_delete, &(current_rel_type->hash_table[position]));
-	} else {
-		printf("[ERROR] ");
-		printf("delete_relation failed: could not find relation.\n");
-	}
+	//} else {
+		//printf("[ERROR] ");
+		//printf("delete_relation failed: could not find relation.\n");
+	//}
 }
 
 void relation_type_list_delete(relation_type** global_relation_type_list, relation_type* to_delete){
