@@ -23,15 +23,16 @@
 
 // VARIOUS CONSTANTS
 
-#define REL_HASH_TABLE_SIZE 3000
-#define ENTITY_HASH_TABLE_SIZE 1000 
+#define REL_TYPE_ARRAY_SIZE 10
+#define ENTITY_HASH_TABLE_SIZE 1000
 #define MAX_HASH_VALUE UINT_MAX
 
 #define INPUT_BUFFER_SIZE 400
 #define OUTPUT_BUFFER_SIZE 6000
 #define LINE_BUFFER_SIZE 5000
 
-#define STEPS_BETWEEN_CLEANUPS 10000
+#define ADDENT_CACHE_ENABLED 1
+#define CACHE_ENABLED 1
 
 //Set this constant to 0 to void verbose log messages
 const int verbose = 0;
@@ -86,8 +87,8 @@ typedef struct rb_node{
 
 typedef struct rel_type{
 	char* name;
-	struct rel_type* prec;
-	struct rel_type* next;
+	//struct rel_type* prec;
+	//struct rel_type* next;
 	relation* relation_root;
 	rb_node* root;
 } relation_type;
@@ -96,7 +97,6 @@ typedef enum data_type{
 	ENTITY,
 	REL,
 	REL_TYPE,
-	ENT_REL_LIST
 } data_t;
 
 // CACHE VARIABLES
@@ -170,7 +170,7 @@ void ent_list_head_insert(entity* new_entity, entity** list_head){
 	new_entity->prec = NULL;
 	*list_head = new_entity;
 }
-
+/*  
 void rel_type_list_head_insert(relation_type* new_rel_type, relation_type** list_head){
 	//Inserts a relation type as head of list_head
 	if(verbose){
@@ -185,6 +185,7 @@ void rel_type_list_head_insert(relation_type* new_rel_type, relation_type** list
 	new_rel_type->prec = NULL;
 	*list_head = new_rel_type;
 }
+
 
 void rel_type_list_ordered_insert(relation_type* new_rel_type, relation_type** list_head){
 	//Inserts a relation type in the correct position
@@ -216,6 +217,7 @@ void rel_type_list_ordered_insert(relation_type* new_rel_type, relation_type** l
 	new_rel_type->prec = follow;
 	new_rel_type->next = nav;
 }
+*/
 
 void rb_node_list_head_insert(rb_node* new_node, rb_node** list_head){
 	new_node->next = *list_head;
@@ -269,7 +271,7 @@ entity* find_entity_in_list(entity* list_head, char* name){
 	}
 	return NULL;
 }
-
+/*
 relation_type* find_relation_type_in_list(relation_type* list_head, char* name){
 	while(list_head!=NULL){
 		if(strcmp(list_head->name, name)==0){
@@ -280,6 +282,17 @@ relation_type* find_relation_type_in_list(relation_type* list_head, char* name){
 			return list_head;
 		}
 		list_head = list_head->next;
+	}
+	return NULL;
+}
+*/
+
+relation_type* find_relation_type_in_array(relation_type** rel_type_array, char* name){
+	int i = 0;
+	for(i=0; i<REL_TYPE_ARRAY_SIZE; i++){
+		if(rel_type_array[i] && strcmp(rel_type_array[i]->name, name)==0){
+			return rel_type_array[i];
+		}
 	}
 	return NULL;
 }
@@ -314,6 +327,7 @@ void print_entity_list(entity* list_head){
 	}
 }
 
+/*  
 void print_rel_type_list(relation_type* list_head){
 	while(list_head!=NULL){
 		printf("[PRINT] (%p) ", (void*)list_head);
@@ -321,6 +335,7 @@ void print_rel_type_list(relation_type* list_head){
 		list_head = ((relation_type*)list_head)->next;
 	}
 }
+*/
 
 void entity_hash_table_insert(entity** hash_table, entity* ent, unsigned int position){
 	ent_list_head_insert(ent, &hash_table[position]); 
@@ -358,6 +373,7 @@ void print_entity_hash_table(entity** hash_table, size_t hash_table_size){
 	}
 }
 
+/*  
 void print_all_scoreboard_entries(relation_type* global_relation_type_list){
 	while(global_relation_type_list != NULL){
 		printf("[PRINT] ");
@@ -366,18 +382,21 @@ void print_all_scoreboard_entries(relation_type* global_relation_type_list){
 		rb_preorder_tree_walk(global_relation_type_list->root);
 		global_relation_type_list = global_relation_type_list->next;
 	}
+
 }
+*/
 
 int relation_node_compare(relation* x, relation* y){
+	int a = strcmp(x->to->name, y->to->name);
 	if(x==NULL){
 		return 0;
 	}
 	if(y==NULL){
 		return 1;
 	}
-	if(strcmp(x->to->name, y->to->name) > 0){ //If the name of x's receiver comes after y's receiver then x>y
+	if(a > 0){ //If the name of x's receiver comes after y's receiver then x>y
 		return 1;
-	} else if (strcmp(x->to->name, y->to->name) < 0){ //If the name of y's receiver comes after then x<y
+	} else if (a < 0){ //If the name of y's receiver comes after then x<y
 		return -1;
 	} else { //If names are the same then compare by name of sender (As there can't be duplicates, this covers all cases)
 		return strcmp(x->from->name, y->from->name) < 0 ? -1 : 1;
@@ -403,10 +422,11 @@ int relation_node_string_compare(relation* x, char* from, char* to){
 }
 
 relation* relation_tree_search(relation* node, char* from, char* to, relation** insertion_point){
-	if(relation_node_string_compare(node, from, to)==0){
+	int a = relation_node_string_compare(node, from, to);
+	if(a==0){
 		return node;
 	}
-	if(relation_node_string_compare(node, from, to) > 0){
+	if(a > 0){
 		if(node->left == NULL){
 			if(insertion_point){
 				*insertion_point = node;	
@@ -525,6 +545,7 @@ void relation_preorder_tree_walk(relation* node){
 	}
 }
 
+/*  
 void print_all_relation_trees(relation_type* global_relation_type_list){
 	while(global_relation_type_list){
 		if(global_relation_type_list->relation_root){
@@ -539,6 +560,7 @@ void print_all_relation_trees(relation_type* global_relation_type_list){
 	}
 
 }
+*/
 
 int rb_node_compare(rb_node* x, rb_node* y){ //Acts as a > 'greater than' sign
 	if(x==NULL){
@@ -860,9 +882,15 @@ void rb_modified_inorder_tree_walk(rb_node* node, char* ent_string, int score_to
 		rb_modified_inorder_tree_walk(node->right, ent_string, score_to_search);
 	}
 	if(node->score == score_to_search){
+		fputc(32, stdout);
+		fputc(34, stdout);
+		fputs(node->ent->name, stdout);
+		fputc(34, stdout);
+		/*  
 		strcat(ent_string, " \"");
 		strcat(ent_string, node->ent->name);
 		strcat(ent_string, "\"");
+		*/
 	} else {
 		return;
 	}
@@ -897,7 +925,8 @@ unsigned int string_compactor(int num, ...){
 	va_start(arglist, num);
 	for(i=0; i<num; i++){
 		currString = va_arg(arglist, char*);	
-		for(j=0; j<strlen(currString); j+=2){
+		size_t length = strlen(currString);
+		for(j=0; j<length; j+=2){
 			currSum = currSum*33 + (int)currString[j];
 		}
 	}
@@ -908,8 +937,6 @@ unsigned int hash(unsigned int key, data_t type) {
 	switch(type){
 		case ENTITY:
 			return key%ENTITY_HASH_TABLE_SIZE;
-		case REL:
-			return key%REL_HASH_TABLE_SIZE;
 		default:
 			return 0;
 	}
@@ -946,7 +973,16 @@ relation_type* add_new_relation_type(relation_type** relation_type_list, char* n
 	relation_type* new_rel_type = malloc(sizeof(relation_type));
 	new_rel_type->name = malloc(strlen(name)+1);
 	strcpy(new_rel_type->name, name);
-	rel_type_list_ordered_insert(new_rel_type, relation_type_list);
+	//rel_type_list_ordered_insert(new_rel_type, relation_type_list);
+	int i = 0;
+	while(*relation_type_list && strcmp((*relation_type_list)->name, name) < 0){
+		relation_type_list++;
+		i++;
+	}
+	if(*relation_type_list){
+		memmove(relation_type_list+1, relation_type_list, sizeof(relation_type*)*(REL_TYPE_ARRAY_SIZE-i));
+	}
+	*relation_type_list = new_rel_type;
 	initialize_new_rel_type(new_rel_type);
 	return new_rel_type;
 }
@@ -999,6 +1035,7 @@ void delete_relation(relation_type* current_rel_type, relation* to_delete){
 	relation_tree_delete(&(current_rel_type->relation_root), to_delete);
 }
 
+/*  
 void relation_type_list_delete(relation_type** global_relation_type_list, relation_type* to_delete){
 	relation_type* nav = *global_relation_type_list;
 	while(nav){
@@ -1018,6 +1055,7 @@ void relation_type_list_delete(relation_type** global_relation_type_list, relati
 		nav = nav->next;
 	}
 }
+*/
 
 void update_entity_relation_count(unsigned int score_difference, rb_node* rb_node_list, relation_type* current_rel_type){
 	while(rb_node_list){
@@ -1029,17 +1067,19 @@ void update_entity_relation_count(unsigned int score_difference, rb_node* rb_nod
 	}
 }
 
-void initialize_global_structure(entity*** hash_table, relation_type** relation_type_list){
+void initialize_global_structure(entity*** hash_table, relation_type*** relation_type_list){
 	//Initializes every data structure necessary for the program
 	old_report = malloc(OUTPUT_BUFFER_SIZE);
 	*old_report = '\0';
 	current_line = malloc(LINE_BUFFER_SIZE);
 	output_string = malloc(OUTPUT_BUFFER_SIZE);
 	*hash_table = get_new_entity_hash_table();
-	*relation_type_list = NULL;
+	*relation_type_list = calloc(REL_TYPE_ARRAY_SIZE, sizeof(relation_type*));
 }
 
+ 
 void delete_empty_rel_types(relation_type** relation_type_list){
+	/*  
 	relation_type* nav = *relation_type_list;
 	while(nav){
 		if(nav->root == NULL){
@@ -1048,8 +1088,15 @@ void delete_empty_rel_types(relation_type** relation_type_list){
 		}
 		nav = nav->next;
 	}
+	*/
+	for(int i = 0; i<REL_TYPE_ARRAY_SIZE; i++){
+		if(relation_type_list[i] && relation_type_list[i]->root == NULL){
+			free(relation_type_list[i]->name);
+			free(relation_type_list[i]);
+			relation_type_list[i] = NULL;
+		}
+	}
 }
-
 void clear_invalid_relations_in_tree(relation* node, relation** root, relation_type* current_rel_type, entity* to_delete){
 	//Does a post-order walk of the tree and deletes any node that has one (or more) of its entities in global_deleted_entities_list
 	if(node){
@@ -1076,12 +1123,19 @@ void clear_invalid_relations_in_tree(relation* node, relation** root, relation_t
 
 //void clear_invalid_entries(entity** global_entity_hash_table, relation_type** rel_list, deleted_entity** global_deleted_entities_list){
 void clear_invalid_entries(entity** global_entity_hash_table, relation_type** rel_list, entity* to_delete){
-	relation_type* nav = *rel_list;
+	//relation_type* nav = *rel_list;
+	for(int i = 0; i < REL_TYPE_ARRAY_SIZE && to_delete->n_rel != 0; i++){
+		if(rel_list[i]){
+			clear_invalid_relations_in_tree(rel_list[i]->relation_root, &(rel_list[i]->relation_root), rel_list[i], to_delete);
+		}
+	}
+	/*  
 	while(to_delete->n_rel != 0 && nav){
 		//clear_invalid_relations_in_tree(nav->relation_root, &(nav->relation_root), nav, *global_deleted_entities_list);
 		clear_invalid_relations_in_tree(nav->relation_root, &(nav->relation_root), nav, to_delete);
 		nav = nav->next;
 	}
+	*/
 }
 
 void cleanup(entity*** hash_table, relation_type** relation_type_list){
@@ -1110,17 +1164,21 @@ void addent(entity** global_entity_hash_table, relation_type** global_relation_t
 		printf("addent: entity %s\n", name);
 	}
 	entity* current_entity;
-	if(cached_entity_A && strcmp(cached_entity_A->name, name)==0){
-		if(verbose){
-			printf("[DEBUG] ");
-			printf("Using cached entity %s\n", name); 
+	if(ADDENT_CACHE_ENABLED){
+		if(cached_entity_A && strcmp(cached_entity_A->name, name)==0){
+			if(verbose){
+				printf("[DEBUG] ");
+				printf("Using cached entity %s\n", name); 
+			}
+			current_entity = cached_entity_A;	
+		} else {
+			current_entity = find_entity(global_entity_hash_table, name);
+			if(current_entity){
+				cached_entity_A = current_entity;
+			}
 		}
-		current_entity = cached_entity_A;	
 	} else {
 		current_entity = find_entity(global_entity_hash_table, name);
-		if(current_entity){
-			cached_entity_A = current_entity;
-		}
 	}
 	if(!current_entity){
 		//If entity does not already exist then add it
@@ -1135,29 +1193,34 @@ void delent(entity** global_entity_hash_table, relation_type** global_relation_t
 	}
 	//Check if entity actually exists and tries to fetch it
 	entity* current_entity;
-	if(cached_entity_A && strcmp(cached_entity_A->name, name)==0){
-		if(verbose){
-			printf("[DEBUG] ");
-			printf("Using cached entity %s\n", name); 
+	if(CACHE_ENABLED){
+		if(cached_entity_A && strcmp(cached_entity_A->name, name)==0){
+			if(verbose){
+				printf("[DEBUG] ");
+				printf("Using cached entity %s\n", name); 
+			}
+			current_entity = cached_entity_A;	
+			cached_entity_A = NULL;
+		} else {
+			current_entity = find_entity(global_entity_hash_table, name);
 		}
-		current_entity = cached_entity_A;	
-		cached_entity_A = NULL;
+		if(cached_entity_B && strcmp(cached_entity_B->name, name)==0){
+			cached_entity_B = NULL;
+		}
 	} else {
 		current_entity = find_entity(global_entity_hash_table, name);
 	}
-	if(cached_entity_B && strcmp(cached_entity_B->name, name)==0){
-		cached_entity_B = NULL;
-	}
 	if(current_entity){
 		//If the entity exists, then delete every reference to this entity from other entities
-		relation_type* nav = *global_relation_type_list;
-		while(nav){
+		//relation_type* nav = *global_relation_type_list;
+		//while(nav){
+		for(int i = 0; i < REL_TYPE_ARRAY_SIZE; i++){
 			//For each relation type, find and delete the scoreboard entry (if it exists) associated with the entity
-			rb_node* current_scoreboard_entry = find_scoreboard_entry(nav, current_entity);
+			rb_node* current_scoreboard_entry = find_scoreboard_entry(global_relation_type_list[i], current_entity);
 			if(current_scoreboard_entry){
-				delete_scoreboard_entry(current_scoreboard_entry, nav);	
+				delete_scoreboard_entry(current_scoreboard_entry, global_relation_type_list[i]);	
 			}
-			nav = nav->next;
+			//nav = nav->next;
 		}
 		//Clear up the entity
 		clear_invalid_entries(global_entity_hash_table, global_relation_type_list, current_entity);
@@ -1175,76 +1238,85 @@ void addrel(entity** global_entity_hash_table, relation_type** global_relation_t
 	//Find if both entities that are involved exist
 	entity *ent_from = NULL, *ent_to = NULL;
 	relation* insertion_point = NULL;
-	if(cached_entity_A){
-		if(strcmp(cached_entity_A->name, from)==0){
-			if(verbose){
-				printf("[DEBUG] ");
-				printf("Using cached entity A as from: %s\n", cached_entity_A->name); 
+	if(CACHE_ENABLED){
+		if(cached_entity_A){
+			if(strcmp(cached_entity_A->name, from)==0){
+				if(verbose){
+					printf("[DEBUG] ");
+					printf("Using cached entity A as from: %s\n", cached_entity_A->name); 
+				}
+				ent_from = cached_entity_A;
 			}
-			ent_from = cached_entity_A;
-		}
-		if(strcmp(cached_entity_A->name, to)==0){
-			if(verbose){
-				printf("[DEBUG] ");
-				printf("Using cached entity A as to: %s\n", cached_entity_A->name); 
+			if(strcmp(cached_entity_A->name, to)==0){
+				if(verbose){
+					printf("[DEBUG] ");
+					printf("Using cached entity A as to: %s\n", cached_entity_A->name); 
+				}
+				ent_to = cached_entity_A;
 			}
-			ent_to = cached_entity_A;
 		}
-	}
-	if(cached_entity_B && (!ent_from || !ent_to)){
-		if(strcmp(cached_entity_B->name, from)==0){
-			if(verbose){
-				printf("[DEBUG] ");
-				printf("Using cached entity B as from: %s\n", cached_entity_B->name); 
+		if(cached_entity_B && (!ent_from || !ent_to)){
+			if(strcmp(cached_entity_B->name, from)==0){
+				if(verbose){
+					printf("[DEBUG] ");
+					printf("Using cached entity B as from: %s\n", cached_entity_B->name); 
+				}
+				ent_from = cached_entity_B;
 			}
-			ent_from = cached_entity_B;
-		}
-		if(strcmp(cached_entity_B->name, to)==0){
-			if(verbose){
-				printf("[DEBUG] ");
-				printf("Using cached entity B as to: %s\n", cached_entity_B->name); 
+			if(strcmp(cached_entity_B->name, to)==0){
+				if(verbose){
+					printf("[DEBUG] ");
+					printf("Using cached entity B as to: %s\n", cached_entity_B->name); 
+				}
+				ent_to = cached_entity_B;
 			}
-			ent_to = cached_entity_B;
 		}
-	}
-	if(!ent_from) {
-		ent_from  = find_entity(global_entity_hash_table, from);
-		if(ent_from){
-			if(verbose){
-				printf("[DEBUG] ");
-				printf("Overwriting cached entity A with %s\n", ent_from->name); 
+		if(!ent_from) {
+			ent_from  = find_entity(global_entity_hash_table, from);
+			if(ent_from){
+				if(verbose){
+					printf("[DEBUG] ");
+					printf("Overwriting cached entity A with %s\n", ent_from->name); 
+				}
+				cached_entity_A = ent_from;
 			}
-			cached_entity_A = ent_from;
 		}
-	}
-	if(!ent_to){
-		ent_to  = find_entity(global_entity_hash_table, to);
-		if(ent_to){
-			if(verbose){
-				printf("[DEBUG] ");
-				printf("Overwriting cached entity B with %s\n", ent_to->name); 
+		if(!ent_to){
+			ent_to  = find_entity(global_entity_hash_table, to);
+			if(ent_to){
+				if(verbose){
+					printf("[DEBUG] ");
+					printf("Overwriting cached entity B with %s\n", ent_to->name); 
+				}
+				cached_entity_B = ent_to;
 			}
-			cached_entity_B = ent_to;
 		}
+	} else {
+		ent_from = find_entity(global_entity_hash_table, from);
+		ent_to = find_entity(global_entity_hash_table, to);
 	}
 	if(ent_from && ent_to){
 		//If both entities actually exist then attempt an insertion of a new relation between ent_from and ent_to
 		relation_type* current_rel_type;
-		if(cached_relation_type && strcmp(cached_relation_type->name, name)==0){
-			if(verbose){
-				printf("[DEBUG] ");
-				printf("Using cached relation type: %s\n", cached_relation_type->name); 
-			}
-			current_rel_type = cached_relation_type;
-		} else {
-			current_rel_type = find_relation_type_in_list(*global_relation_type_list, name);
-			if(current_rel_type){
+		if(CACHE_ENABLED){
+			if(cached_relation_type && strcmp(cached_relation_type->name, name)==0){
 				if(verbose){
 					printf("[DEBUG] ");
-					printf("Overwriting cached relation type with %s\n", current_rel_type->name); 
+					printf("Using cached relation type: %s\n", cached_relation_type->name); 
 				}
-				cached_relation_type = current_rel_type;
+				current_rel_type = cached_relation_type;
+			} else {
+				current_rel_type = find_relation_type_in_array(global_relation_type_list, name);
+				if(current_rel_type){
+					if(verbose){
+						printf("[DEBUG] ");
+						printf("Overwriting cached relation type with %s\n", current_rel_type->name); 
+					}
+					cached_relation_type = current_rel_type;
+				}
 			}
+		} else {
+			current_rel_type = find_relation_type_in_array(global_relation_type_list, name);
 		}
 		if(!current_rel_type){
 			//If the current relation type does not exist then create it
@@ -1284,36 +1356,41 @@ void delrel(entity** global_entity_hash_table, relation_type** global_relation_t
 		printf("[DEBUG] ");
 		printf("delrel: from %s to %s. Type: %s\n", from, to, name);
 	}
-	relation_type* current_rel_type = find_relation_type_in_list(*global_relation_type_list, name);
+	relation_type* current_rel_type = find_relation_type_in_array(global_relation_type_list, name);
 	if(current_rel_type){
 		entity *ent_from = NULL, *ent_to = NULL;
-		if(cached_entity_A){
-			if(strcmp(cached_entity_A->name, from)==0){
-				ent_from = cached_entity_A;
+		if(CACHE_ENABLED){
+			if(cached_entity_A){
+				if(strcmp(cached_entity_A->name, from)==0){
+					ent_from = cached_entity_A;
+				}
+				if(strcmp(cached_entity_A->name, to)==0){
+					ent_to = cached_entity_A;
+				}
 			}
-			if(strcmp(cached_entity_A->name, to)==0){
-				ent_to = cached_entity_A;
+			if(cached_entity_B && (!ent_from || !ent_to)){
+				if(strcmp(cached_entity_B->name, from)==0){
+					ent_from = cached_entity_B;
+				}
+				if(strcmp(cached_entity_B->name, to)==0){
+					ent_to = cached_entity_B;
+				}
 			}
-		}
-		if(cached_entity_B && (!ent_from || !ent_to)){
-			if(strcmp(cached_entity_B->name, from)==0){
-				ent_from = cached_entity_B;
+			if(!ent_from) {
+				ent_from  = find_entity(global_entity_hash_table, from);
+				if(ent_from){
+					cached_entity_A = ent_from;
+				}
 			}
-			if(strcmp(cached_entity_B->name, to)==0){
-				ent_to = cached_entity_B;
+			if(!ent_to){
+				ent_to  = find_entity(global_entity_hash_table, to);
+				if(ent_to){
+					cached_entity_B = ent_to;
+				}
 			}
-		}
-		if(!ent_from) {
-			ent_from  = find_entity(global_entity_hash_table, from);
-			if(ent_from){
-				cached_entity_A = ent_from;
-			}
-		}
-		if(!ent_to){
-			ent_to  = find_entity(global_entity_hash_table, to);
-			if(ent_to){
-				cached_entity_B = ent_to;
-			}
+		} else {
+			ent_from = find_entity(global_entity_hash_table, from);
+			ent_to = find_entity(global_entity_hash_table, to);
 		}
 		//If so, find both entities involved
 		if(ent_from && ent_to){
@@ -1337,37 +1414,66 @@ void delrel(entity** global_entity_hash_table, relation_type** global_relation_t
 	}
 }
 
+int is_rel_type_array_empty(relation_type** global_relation_type_list){
+	for(int i = 0; i < REL_TYPE_ARRAY_SIZE; i++){
+		if(global_relation_type_list[i]){
+			return 0;
+		}
+	}
+	return 1;
+}
 
 void report(entity** global_entity_hash_table, relation_type** global_relation_type_list){
 	delete_empty_rel_types(global_relation_type_list);
+	/*  
 	if(!update_needed){
 		puts(old_report);
 		return;
 	}
-	relation_type* nav = *global_relation_type_list;
+	*/
+	//relation_type* nav = global_relation_type_list;
 	*output_string = '\0';
 	int first_line = 1;
-	char points[12];
-	while(nav){
-		*current_line = '\0';
-		if(!first_line){
-			//Adding space after semicolon if needed
-			strcat(current_line, " ");
+	//char points[12];
+	int i;
+	if(is_rel_type_array_empty(global_relation_type_list)){
+		puts("none");
+		return;
+	} 
+	for(i=0; i<REL_TYPE_ARRAY_SIZE; i++){
+		if(global_relation_type_list[i] == NULL){
+			continue;
 		} else {
-		}
-		strcat(current_line, "\"");
-		strcat(current_line, nav->name);
-		strcat(current_line, "\"");	
-		rb_node* max_node = rb_tree_maximum(nav->root);
-		rb_modified_inorder_tree_walk(nav->root, current_line, max_node->score);
-		sprintf(points, " %d;", max_node->score);
-		strcat(current_line, points);
-		strcat(output_string, current_line);
-		nav = nav->next;
-		if(first_line){
-			first_line = 0;
+			*current_line = '\0';
+			if(!first_line){
+				//Adding space after semicolon if needed
+				//strcat(current_line, " ");
+				fputc(32, stdout);
+			}
+			/*  
+			strcat(current_line, nav->name);
+			strcat(current_line, "\"");	
+			*/
+			fputc(34, stdout);
+			fputs(global_relation_type_list[i]->name, stdout);
+			fputc(34, stdout);
+			rb_node* max_node = rb_tree_maximum(global_relation_type_list[i]->root);
+			rb_modified_inorder_tree_walk(global_relation_type_list[i]->root, current_line, max_node->score);
+			//sprintf(points, " %d;", max_node->score);
+			fputc(32, stdout);
+			fprintf(stdout, "%d", max_node->score);
+			fputc(59, stdout);
+			//strcat(current_line, points);
+			//strcat(output_string, current_line);
+			//nav = nav->next;
+			if(first_line){
+				first_line = 0;
+			}
 		}
 	}
+	fputc(10, stdout);
+	//fflush(stdout);
+	/*  
 	if(strlen(output_string)){
 		puts(output_string);
 		strcpy(old_report, output_string);
@@ -1375,12 +1481,13 @@ void report(entity** global_entity_hash_table, relation_type** global_relation_t
 		puts("none");
 		strcpy(old_report, "none");
 	}
+	*/
 	update_needed = 0;
 }
 
 int main(){
 	entity** global_entity_hash_table;
-	relation_type* global_relation_type_list;
+	relation_type** global_relation_type_list;
 	initialize_global_structure(&global_entity_hash_table, &global_relation_type_list);
 	char *inputBuffer = malloc(INPUT_BUFFER_SIZE);
 	size_t n = INPUT_BUFFER_SIZE;
@@ -1393,26 +1500,26 @@ int main(){
 			} 
 			command = strtok(inputBuffer, separators);
 			if(command[0]=='r'){
-				report(global_entity_hash_table, &global_relation_type_list);
+				report(global_entity_hash_table, global_relation_type_list);
 			} else if(command[0]=='a'){
 				if(command[3]=='e'){
 					arg1 = strtok(NULL, separators);	
-					addent(global_entity_hash_table, &global_relation_type_list, arg1);
+					addent(global_entity_hash_table, global_relation_type_list, arg1);
 				} else if(command[3]=='r'){
 					arg1 = strtok(NULL, separators);
 					arg2 = strtok(NULL, separators);
 					arg3 = strtok(NULL, separators);
-					addrel(global_entity_hash_table, &global_relation_type_list, arg1, arg2, arg3);
+					addrel(global_entity_hash_table, global_relation_type_list, arg1, arg2, arg3);
 				}
 			} else if (command[0] == 'd'){
 				if(command[3]=='e'){
 					arg1 = strtok(NULL, separators);
-					delent(global_entity_hash_table, &global_relation_type_list, arg1);
+					delent(global_entity_hash_table, global_relation_type_list, arg1);
 				} else if(command[3]=='r'){
 					arg1 = strtok(NULL, separators);
 					arg2 = strtok(NULL, separators);
 					arg3 = strtok(NULL, separators);
-					delrel(global_entity_hash_table, &global_relation_type_list, arg1, arg2, arg3);
+					delrel(global_entity_hash_table, global_relation_type_list, arg1, arg2, arg3);
 				}
 			}
 			if(verbose){
